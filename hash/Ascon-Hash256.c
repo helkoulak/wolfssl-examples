@@ -37,15 +37,23 @@ void usage(void)
 #endif
 
 void free_mem(wc_AsconHash256 *asconHash, byte *hash, byte *rawInput, FILE *inputStream) {
-    fclose(inputStream);
-    free(rawInput);
-    free(hash);
-    wc_AsconHash256_Free(asconHash);
+    if (asconHash != NULL) {
+        wc_AsconHash256_Free(asconHash);
+    }
+    if (rawInput != NULL) {
+        free(rawInput);
+    }
+    if (inputStream != NULL) {
+        fclose(inputStream);
+    }
+    if (hash != NULL) {
+        free(hash);
+    }
 }
 
 int main(int argc, char** argv)
 {
-    int ret = -1;
+    int ret = 0;
 #ifdef HAVE_ASCON
     wc_AsconHash256* asconHash = NULL;
     byte*  hash = NULL;
@@ -59,54 +67,69 @@ int main(int argc, char** argv)
     fName = argv[1];
     printf("Hash input file %s\n", fName);
 
-    inputStream = fopen(fName, "rb");
-    if (inputStream == NULL) {
-        printf("ERROR: Unable to open file\n");
-        return -1;
+    while (1) {
+        inputStream = fopen(fName, "rb");
+        if (inputStream == NULL) {
+            printf("ERROR: Unable to open file\n");
+            ret = -1;
+            break;
+        }
+
+        /* find length of the file */
+        fseek(inputStream, 0, SEEK_END);
+        fileLength = (int) ftell(inputStream);
+        fseek(inputStream, 0, SEEK_SET);
+
+        /* Create and initialize hash context */
+        asconHash = wc_AsconHash256_New();
+        if (asconHash == NULL) {
+            printf("ERROR: Unable to create the hash context\n");
+            ret = -1;
+            break;
+        }
+
+        hash = (byte*) malloc(ASCON_HASH256_SZ);
+        if (hash == NULL) {
+            printf("ERROR: Unable to allocate space for hash value\n");
+            ret = -1;
+            break;
+        }
+
+        rawInput = (byte*) malloc(fileLength);
+        if (rawInput == NULL) {
+            printf("ERROR: Unable to allocate space for raw input\n");
+            ret = -1;
+            break;
+        }
+
+        /* Read input file into a byte array*/
+        size_t read = fread(rawInput, 1, fileLength, inputStream);
+        if (read != fileLength) {
+            printf("ERROR: Failed to read the size of input file\n");
+            ret = -1;
+            break;
+        }
+
+        ret = wc_AsconHash256_Update(asconHash, rawInput, fileLength);
+        if (ret != 0) {
+            printf("ERROR: Hash update failed\n");
+            ret = -1;
+            break;
+        }
+
+        ret = wc_AsconHash256_Final(asconHash, hash);
+        if (ret != 0) {
+            printf("ERROR: Hash operation failed");
+            ret = -1;
+            break;
+        }
+        break;
     }
 
-    /* find length of the file */
-    fseek(inputStream, 0, SEEK_END);
-    fileLength = (int) ftell(inputStream);
-    fseek(inputStream, 0, SEEK_SET);
-
-    /* Create and initialize hash context */
-    asconHash = wc_AsconHash256_New();
-    if (asconHash == NULL) {
-        printf("ERROR: Unable to create the hash context\n");
-    }
-
-    hash = (byte*) malloc(ASCON_HASH256_SZ);
-    if (hash == NULL) {
-        printf("ERROR: Unable to allocate space for hash value\n");
-    }
-
-    rawInput = (byte*) malloc(fileLength);
-    if (rawInput == NULL) {
-        printf("ERROR: Unable to allocate space for raw input\n");
-    }
-
-    /* Read input file into a byte array*/
-    ret = fread(rawInput, 1, fileLength, inputStream);
-    if (ret != fileLength) {
-        printf("ERROR: Failed to read the size of input file\n");
-    }
-
-    ret = wc_AsconHash256_Update(asconHash, rawInput, fileLength);
-    if (ret != 0) {
-        printf("ERROR: Hash update failed\n");
-    }
-
-    ret = wc_AsconHash256_Final(asconHash, hash);
-    if (ret != 0) {
-        printf("ERROR: Hash operation failed");
-    }
-    else {
-        printf("Hash result is: ");
-        for (int i = 0; i < ASCON_HASH256_SZ; i++)
-            printf("%02x", hash[i]);
-        printf("\n");
-    }
+    printf("Hash result is: ");
+    for (int i = 0; i < ASCON_HASH256_SZ; i++)
+        printf("%02x", hash[i]);
+    printf("\n");
 
     free_mem(asconHash, hash, rawInput, inputStream);
 #else
