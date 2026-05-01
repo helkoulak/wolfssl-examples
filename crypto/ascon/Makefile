@@ -4,7 +4,7 @@ WOLFSSL_INSTALL_DIR=/usr/local
 LIBS=-L$(WOLFSSL_INSTALL_DIR)/lib -lwolfssl
 
 ascon-file-encrypt: ascon-file-encrypt.o
-	$(CC) -o $@ $^ $(CFLAGS) $(LIBS) 
+	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
 
 .PHONY: clean
 
